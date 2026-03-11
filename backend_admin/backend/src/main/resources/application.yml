@@ -1,0 +1,44 @@
+server:
+  port: 8087
+
+spring:
+  jmx:
+    enabled: false  # 禁用 JMX，防止随机端口占用报错
+
+  application:
+    name: admin-backend
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    # Added allowPublicKeyRetrieval=true to the end of the URL
+    url: jdbc:mysql://localhost:3306/video_platform?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 307655
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 
+      database: 0
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    map-underscore-to-camel-case: true
+  mapper-locations: classpath:mapper/*.xml
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+      id-type: auto
+
+jwt:
+  secret: video-platform-secret-key-2024-very-long-secret-abcdewdfdsfsdffgsd
+  access-token-expiration: 1209600
+  refresh-token-expiration: 604800

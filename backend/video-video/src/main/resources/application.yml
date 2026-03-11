@@ -1,0 +1,70 @@
+server:
+  port: 8083
+  # Tomcat 连接超时时间（毫秒），默认30分钟（1800000毫秒）
+  connection-timeout: 1800000
+  # Tomcat 保持连接超时时间（毫秒），默认30分钟
+  keep-alive-timeout: 1800000
+
+spring:
+  application:
+    name: video-video
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
+        namespace: video-platform
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/video_platform?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: 307655
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  kafka:
+    bootstrap-servers: localhost:9092
+
+# MinIO配置
+minio:
+  endpoint: http://localhost:9090
+  access-key: minioadmin
+  secret-key: minioadmin
+  bucket-name: video-platform
+
+# FFmpeg配置
+ffmpeg:
+  # FFmpeg可执行文件路径（Windows: ffmpeg.exe, Linux/Mac: ffmpeg）
+  path: 'C:\Users\Administrator\Desktop\ffmpeg\bin\ffmpeg.exe'
+  # FFprobe可执行文件路径（Windows: ffprobe.exe, Linux/Mac: ffprobe）
+  ffprobe-path: 'C:\Users\Administrator\Desktop\ffmpeg\bin\ffprobe.exe'
+  # 视频压缩配置
+  compression:
+    # 是否启用压缩（默认true）
+    enabled: true
+    # 视频比特率（bps），默认1Mbps
+    video-bitrate: 1000000
+    # 音频比特率（bps），默认128kbps
+    audio-bitrate: 128000
+    # 视频编码器
+    video-codec: libx264
+    # 音频编码器
+    audio-codec: aac
+    # 输出格式
+    format: mp4
+    # 压缩超时时间（秒），默认30分钟（1800秒）
+    timeout: 1800
+
+mybatis-plus:
+  configuration:
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0

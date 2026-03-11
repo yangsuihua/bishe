@@ -1,0 +1,51 @@
+# OS files
+.DS_Store
+Thumbs.db
+
+# JetBrains
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# VS Code
+.vscode/
+
+# Build and IDE files
+target/
+out/
+bin/
+*.class
+*.log
+*.lock
+*.temp
+*.tmp
+
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Frontend build
+dist/
+build/
+
+# Local configuration
+application-local.yml
+application-dev.yml
+*.properties.local
+
+# Project specific
+backend/*/target/
+backend_admin/backend/target/
+backend_admin/frontend/node_modules/
+backend_admin/frontend/dist/

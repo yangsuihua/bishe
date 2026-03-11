@@ -1,0 +1,80 @@
+server:
+  port: 8080
+spring:
+  main:
+    web-application-type: reactive
+  config:
+    import: optional:nacos:video-gateway.yml?namespace=video-platform&group=DEFAULT_GROUP
+  application:
+    name: video-gateway
+  cloud:
+    nacos:
+      username: nacos
+      password: nacos
+      discovery:
+        server-addr: localhost:8848
+        namespace: video-platform
+      config:
+        server-addr: localhost:8848
+        namespace: video-platform
+        file-extension: yml
+    gateway:
+      routes:
+        # 认证服务
+        - id: video-auth
+          uri: lb://video-auth
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=1
+
+        # 用户服务
+        - id: video-user
+          uri: lb://video-user
+          predicates:
+            - Path=/api/user/**
+          filters:
+            - StripPrefix=1
+
+        # 视频服务
+        - id: video-video
+          uri: lb://video-video
+          predicates:
+            - Path=/api/video/**
+          filters:
+            - StripPrefix=1
+
+        # 互动服务
+        - id: video-interaction
+          uri: lb://video-interaction
+          predicates:
+            - Path=/api/interaction/**
+          filters:
+            - StripPrefix=1
+
+        # 搜索服务
+        - id: video-search
+          uri: lb://video-search
+          predicates:
+            - Path=/api/search/**
+          filters:
+            - StripPrefix=1
+
+        # 管理后台
+        - id: video-admin
+          uri: lb://video-admin
+          predicates:
+            - Path=/api/admin/**
+          filters:
+            - StripPrefix=1
+
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: true
+
+jwt:
+  secret: video-platform-secret-key-2024-very-long-secret-abcdewdfdsfsdffgsd
