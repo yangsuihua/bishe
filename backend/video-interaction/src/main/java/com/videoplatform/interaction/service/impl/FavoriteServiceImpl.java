@@ -24,6 +24,8 @@ public class FavoriteServiceImpl implements FavoriteService {
 
     private final UserFavoriteMapper userFavoriteMapper;
     private final VideoMapper videoMapper;
+    private final com.videoplatform.interaction.component.UserBehaviorProducer userBehaviorProducer;
+
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -47,6 +49,9 @@ public class FavoriteServiceImpl implements FavoriteService {
                 .eq(Video::getId, videoId)
                 .setSql("favorite_count = favorite_count + 1");
         videoMapper.update(null, update);
+
+        // 发送行为消息到Kafka
+        userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.COLLECT);
     }
 
     @Override
@@ -63,6 +68,9 @@ public class FavoriteServiceImpl implements FavoriteService {
                     .eq(Video::getId, videoId)
                     .setSql("favorite_count = CASE WHEN favorite_count > 0 THEN favorite_count - 1 ELSE 0 END");
             videoMapper.update(null, update);
+
+            // 发送行为消息到Kafka
+            userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.UNCOLLECT);
         }
     }
 

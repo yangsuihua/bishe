@@ -169,7 +169,10 @@
         
         <div class="slide-info">
           <h3 style="margin-bottom:8px;">{{ user.name || video.username }}</h3>
-          <p>{{ video.title }} #推荐 #热门</p>
+          <p>
+            {{ video.title }}
+            <span v-for="tag in video.tags" :key="tag" class="video-tag-item">#{{ tag }} </span>
+          </p>
           <div style="margin-top:10px; font-size:12px;">🎵 原始声音 - {{ user.name || video.username }}</div>
         </div>
       </div>

@@ -31,6 +31,7 @@ public class LikeServiceImpl implements LikeService {
     private final UserLikeMapper userLikeMapper;
     private final VideoMapper videoMapper;
     private final UserFeignClient userFeignClient;
+    private final com.videoplatform.interaction.component.UserBehaviorProducer userBehaviorProducer;
     
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -70,6 +71,9 @@ public class LikeServiceImpl implements LikeService {
         } catch (Exception e) {
             log.error("更新用户获赞数失败", e);
         }
+
+        // 发送行为消息到Kafka
+        userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.LIKE);
     }
     
     @Override
@@ -100,6 +104,9 @@ public class LikeServiceImpl implements LikeService {
                 } catch (Exception e) {
                     log.error("更新用户获赞数失败", e);
                 }
+
+                // 发送行为消息到Kafka
+                userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.UNLIKE);
             }
         }
     }

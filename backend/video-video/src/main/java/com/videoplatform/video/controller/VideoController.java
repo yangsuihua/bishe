@@ -27,8 +27,9 @@ public class VideoController {
      */
     @GetMapping("/feed")
     public Result<List<VideoDTO>> getVideoFeed(@RequestParam(defaultValue = "1") Integer page,
-                                                @RequestParam(defaultValue = "10") Integer size) {
-        List<VideoDTO> videos = videoService.getVideoFeed(page, size);
+                                                @RequestParam(defaultValue = "10") Integer size,
+                                                @RequestHeader(value = "X-User-Id", required = false) Long userId) {
+        List<VideoDTO> videos = videoService.getVideoFeed(page, size, userId);
         return Result.success(videos);
     }
     

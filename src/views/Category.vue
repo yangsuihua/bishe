@@ -100,7 +100,7 @@
                 <div class="video-details-title-section">
                   <h2 class="video-details-title">{{ selectedVideo.title }}</h2>
                   <div class="video-details-meta">
-                    <span class="video-tag">热门</span>
+                    <span v-for="tag in selectedVideo.tags" :key="tag" class="video-tag">{{ tag }}</span>
                     <span>{{ formatViews(selectedVideo.viewCount) }}次观看</span>
                     <span>•</span>
                     <span>{{ selectedVideo.createdAt }}</span>

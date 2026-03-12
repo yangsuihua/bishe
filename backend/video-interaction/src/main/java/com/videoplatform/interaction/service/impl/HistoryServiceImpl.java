@@ -23,6 +23,8 @@ public class HistoryServiceImpl implements HistoryService {
 
     private final UserHistoryMapper userHistoryMapper;
     private final VideoMapper videoMapper;
+    private final com.videoplatform.interaction.component.UserBehaviorProducer userBehaviorProducer;
+
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -59,6 +61,9 @@ public class HistoryServiceImpl implements HistoryService {
                         .setSql("view_count = view_count + 1");
                 videoMapper.update(null, videoUpdate);
                 log.info("视频播放量+1, videoId: {}, userId: {}", videoId, userId);
+                
+                // 发送起播消息，用于精准去重 (6.1 & 6.2 优化)
+                userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.WATCH_START);
             }
         } else {
             // 之前已经观看过该视频，更新记录
@@ -78,6 +83,18 @@ public class HistoryServiceImpl implements HistoryService {
                         .setSql("view_count = view_count + 1");
                 videoMapper.update(null, videoUpdate);
                 log.info("视频播放量+1（用户重新观看）, videoId: {}, userId: {}", videoId, userId);
+                
+                // 发送起播消息，用于精准去重 (6.1 & 6.2 优化)
+                userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.WATCH_START);
+            }
+
+            // 完播判定逻辑 (4.3 接入完播埋点)
+            // 如果进度 >= 80%，且之前记录的进度还小于 80%，则发送完播消息（防止单次观看重复发送）
+            if (watchProgress != null && watchProgress >= 80.0) {
+                Double prevProgress = exist.getWatchProgress();
+                if (prevProgress == null || prevProgress < 80.0) {
+                    userBehaviorProducer.sendMessage(userId, videoId, com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.WATCH_80);
+                }
             }
         }
     }

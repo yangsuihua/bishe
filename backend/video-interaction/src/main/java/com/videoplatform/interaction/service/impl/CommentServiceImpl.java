@@ -42,6 +42,8 @@ public class CommentServiceImpl implements CommentService {
     private final CommentMapper commentMapper;
     private final VideoMapper videoMapper;
     private final UserFeignClient userFeignClient;
+    private final com.videoplatform.interaction.component.UserBehaviorProducer userBehaviorProducer;
+
     
     @Override
     public List<CommentDTO> getComments(Long videoId, Integer page, Integer size) {
@@ -98,6 +100,10 @@ public class CommentServiceImpl implements CommentService {
             dto.setReplyUsername(replyUser.getUsername());
         }
         dto.setIsLiked(Boolean.FALSE);
+
+        // 发送行为消息到Kafka
+        userBehaviorProducer.sendMessage(dto.getUserId(), dto.getVideoId(), com.videoplatform.common.dto.UserBehaviorMsg.BehaviorType.COMMENT);
+
         return dto;
     }
     

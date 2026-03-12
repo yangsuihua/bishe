@@ -28,6 +28,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
+import java.util.stream.Collectors;
 import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -68,6 +73,10 @@ public class VideoServiceImpl implements VideoService {
     private final MinioClient minioClient;
     private final VideoCompressionService videoCompressionService;
     private final SearchFeignClient searchFeignClient;
+    private final org.springframework.data.redis.core.StringRedisTemplate redisTemplate;
+    
+    private static final String SEEN_KEY_PREFIX = "user:seen:";
+    private static final String PROFILE_KEY_PREFIX = "user:profile:";
     
     @Value("${minio.endpoint}")
     private String minioEndpoint;
@@ -76,20 +85,142 @@ public class VideoServiceImpl implements VideoService {
     private String bucketName;
 
     @Override
-    public List<VideoDTO> getVideoFeed(Integer page, Integer size) {
+    public List<VideoDTO> getVideoFeed(Integer page, Integer size, Long userId) {
         int current = page == null || page < 1 ? 1 : page;
         int pageSize = size == null || size < 1 ? 10 : size;
 
-        Page<Video> pager = new Page<>(current, pageSize);
-        LambdaQueryWrapper<Video> wrapper = new LambdaQueryWrapper<Video>()
+        // 1. 获取已看视频列表 (Stage 6.1)
+        Set<Long> seenIds = new HashSet<>();
+        if (userId != null) {
+            String redisKey = SEEN_KEY_PREFIX + userId;
+            Set<String> members = redisTemplate.opsForSet().members(redisKey);
+            if (members != null) {
+                members.forEach(id -> seenIds.add(Long.valueOf(id)));
+            }
+        }
+
+        List<Video> resultVideos = new ArrayList<>();
+
+        // 2. 个性化召回：根据用户兴趣标签召回 (Stage 6.2 一级召回)
+        if (userId != null) {
+            Map<Object, Object> profile = redisTemplate.opsForHash().entries(PROFILE_KEY_PREFIX + userId);
+            if (!profile.isEmpty()) {
+                // 取分值最高的前3个标签
+                List<String> topTags = profile.entrySet().stream()
+                    .sorted((e1, e2) -> Double.compare(
+                        Double.parseDouble(e2.getValue().toString()), 
+                        Double.parseDouble(e1.getValue().toString())))
+                    .limit(3)
+                    .map(e -> e.getKey().toString())
+                    .collect(Collectors.toList());
+
+                if (!topTags.isEmpty()) {
+                    // 打印一级召回日志 (获取哪三个，评分分别是多少)
+                    StringBuilder profileLog = new StringBuilder();
+                    topTags.forEach(tag -> profileLog.append(tag).append(":").append(profile.get(tag)).append(" "));
+                    log.info("【推荐系统-一级召回】用户: {}, 命中兴趣标签: {}", userId, profileLog.toString());
+
+                    List<VideoTag> tagEntities = videoTagMapper.selectList(
+                        new LambdaQueryWrapper<VideoTag>().in(VideoTag::getName, topTags)
+                    );
+                    if (!tagEntities.isEmpty()) {
+                        List<Integer> tagIds = tagEntities.stream().map(VideoTag::getId).collect(Collectors.toList());
+                        List<VideoTagRelation> relations = videoTagRelationMapper.selectList(
+                            new LambdaQueryWrapper<VideoTagRelation>()
+                                .in(VideoTagRelation::getTagId, tagIds)
+                                .last("LIMIT 100")
+                        );
+                        
+                        List<Long> candidateIds = relations.stream()
+                            .map(VideoTagRelation::getVideoId)
+                            .filter(vid -> !seenIds.contains(vid))
+                            .distinct()
+                            .collect(Collectors.toList());
+
+                        if (!candidateIds.isEmpty()) {
+                            // 召回 70% 的兴趣相关视频
+                            int limit = Math.min(candidateIds.size(), (int)(pageSize * 0.7));
+                            List<Long> targetIds = candidateIds.subList(0, limit);
+                            List<Video> tier1Videos = videoMapper.selectBatchIds(targetIds);
+                            resultVideos.addAll(tier1Videos);
+                            
+                            String titles = tier1Videos.stream().map(Video::getTitle).collect(Collectors.joining("/"));
+                            log.info("【推荐系统-一级召回】用户: {}, 兴趣权重: {}, 成功召回个性化视频: {} 条，标题为：{}", 
+                                userId, profileLog.toString(), tier1Videos.size(), titles);
+                        }
+                    }
+                } else {
+                    log.info("【推荐系统-一级召回】用户: {}, 暂无兴趣画像数据", userId);
+                }
+            } else {
+                log.info("【推荐系统-一级召回】用户: {}, 画像为空，跳过个性化召回", userId);
+            }
+        }
+
+        // 3. 二级召回：全平台按热度补全 (Stage 6.2 二级)
+        if (resultVideos.size() < pageSize) {
+            int needed = pageSize - resultVideos.size();
+            Set<Long> excludeIds = new HashSet<>(seenIds);
+            resultVideos.forEach(v -> excludeIds.add(v.getId()));
+
+            LambdaQueryWrapper<Video> hotWrapper = new LambdaQueryWrapper<Video>()
+                .eq(Video::getStatus, 1)
+                .eq(Video::getDeleted, 0)
+                .orderByDesc(Video::getViewCount)
+                .last("LIMIT " + needed);
+            
+            if (!excludeIds.isEmpty()) {
+                hotWrapper.notIn(Video::getId, excludeIds);
+            }
+            
+            List<Video> hotVideos = videoMapper.selectList(hotWrapper);
+            if (!hotVideos.isEmpty()) {
+                resultVideos.addAll(hotVideos);
+                String titles = hotVideos.stream().map(Video::getTitle).collect(Collectors.joining("/"));
+                log.info("【推荐系统-二级召回】热门视频成功补全: {} 条，标题为：{}", hotVideos.size(), titles);
+            }
+        }
+
+        // 4. 三级召回：全平台按最新补全 (Stage 6.2 三级)
+        if (resultVideos.size() < pageSize) {
+            int needed = pageSize - resultVideos.size();
+            Set<Long> excludeIds = new HashSet<>(seenIds);
+            resultVideos.forEach(v -> excludeIds.add(v.getId()));
+
+            LambdaQueryWrapper<Video> latestWrapper = new LambdaQueryWrapper<Video>()
                 .eq(Video::getStatus, 1)
                 .eq(Video::getDeleted, 0)
                 .orderByDesc(Video::getPublishedAt)
-                .orderByDesc(Video::getViewCount)
-                .orderByDesc(Video::getLikeCount);
-        videoMapper.selectPage(pager, wrapper);
-        List<Video> videos = pager.getRecords();
-        return convertToDTOs(videos);
+                .last("LIMIT " + needed);
+            
+            if (!excludeIds.isEmpty()) {
+                latestWrapper.notIn(Video::getId, excludeIds);
+            }
+            
+            List<Video> latestVideos = videoMapper.selectList(latestWrapper);
+            if (!latestVideos.isEmpty()) {
+                resultVideos.addAll(latestVideos);
+                String titles = latestVideos.stream().map(Video::getTitle).collect(Collectors.joining("/"));
+                log.info("【推荐系统-三级召回】最新视频成功补全: {} 条，标题为：{}", latestVideos.size(), titles);
+            }
+        }
+
+        if (resultVideos.isEmpty()) {
+            log.warn("【推荐系统-召回总结】全平台无可推荐内容");
+        }
+
+        // 结果去重
+
+        // 4. 更新已看列表逻辑已移至异步行为消费者，实现精准曝光去重
+
+        // 5. 循环策略与原子性重置 (Stage 6.3)
+        // 如果推荐结果太少（说明几乎看完了库里所有视频），重置已看列表以实现循环推荐
+        if (userId != null && resultVideos.size() < 3) {
+            log.info("用户 {} 已刷完全平台视频或可用内容不足，重置已看列表", userId);
+            redisTemplate.delete(SEEN_KEY_PREFIX + userId);
+        }
+
+        return convertToDTOs(resultVideos);
     }
 
     @Override
@@ -322,6 +453,18 @@ public class VideoServiceImpl implements VideoService {
         LocalDateTime time = video.getPublishedAt() != null ? video.getPublishedAt() : video.getCreatedAt();
         dto.setCreatedAt(time == null ? null : DATE_TIME_FORMATTER.format(time));
         
+        // 加载标签
+        List<VideoTagRelation> relations = videoTagRelationMapper.selectList(
+            new LambdaQueryWrapper<VideoTagRelation>().eq(VideoTagRelation::getVideoId, video.getId())
+        );
+        if (!relations.isEmpty()) {
+            List<Integer> tagIds = relations.stream().map(VideoTagRelation::getTagId).collect(Collectors.toList());
+            List<VideoTag> tags = videoTagMapper.selectBatchIds(tagIds);
+            dto.setTags(tags.stream().map(VideoTag::getName).collect(Collectors.toList()));
+        } else {
+            dto.setTags(Collections.emptyList());
+        }
+
         dto.setIsLiked(Boolean.FALSE);
         dto.setIsFavorited(Boolean.FALSE);
         dto.setIsFollowing(Boolean.FALSE);
@@ -364,6 +507,7 @@ public class VideoServiceImpl implements VideoService {
 
         Map<Long, User> userMap = loadUsers(userIds);
         Map<Integer, VideoCategory> categoryMap = loadCategories(categoryIds);
+        Map<Long, List<String>> tagMap = loadTags(new HashSet<>(videos.stream().map(Video::getId).collect(Collectors.toList())));
 
         List<VideoDTO> result = new ArrayList<VideoDTO>(videos.size());
         for (Video video : videos) {
@@ -398,6 +542,9 @@ public class VideoServiceImpl implements VideoService {
             dto.setIsLiked(Boolean.FALSE);
             dto.setIsFavorited(Boolean.FALSE);
             dto.setIsFollowing(Boolean.FALSE);
+            
+            dto.setTags(tagMap.getOrDefault(video.getId(), Collections.emptyList()));
+            
             result.add(dto);
         }
         return result;
@@ -413,6 +560,36 @@ public class VideoServiceImpl implements VideoService {
             map.put(user.getId(), user);
         }
         return map;
+    }
+
+    private Map<Long, List<String>> loadTags(Set<Long> videoIds) {
+        if (videoIds.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        
+        // 1. 获取所有视频的标签关联关系
+        List<VideoTagRelation> relations = videoTagRelationMapper.selectList(
+            new LambdaQueryWrapper<VideoTagRelation>().in(VideoTagRelation::getVideoId, videoIds)
+        );
+        if (relations.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        
+        // 2. 获取所有涉及到的标签ID
+        Set<Integer> tagIds = relations.stream().map(VideoTagRelation::getTagId).collect(Collectors.toSet());
+        List<VideoTag> tags = videoTagMapper.selectBatchIds(tagIds);
+        Map<Integer, String> tagIdNameMap = tags.stream().collect(Collectors.toMap(VideoTag::getId, VideoTag::getName));
+        
+        // 3. 构建视频ID -> 标签名称列表的映射
+        Map<Long, List<String>> videoTagsMap = new HashMap<>();
+        for (VideoTagRelation relation : relations) {
+            String tagName = tagIdNameMap.get(relation.getTagId());
+            if (tagName != null) {
+                videoTagsMap.computeIfAbsent(relation.getVideoId(), k -> new ArrayList<>()).add(tagName);
+            }
+        }
+        
+        return videoTagsMap;
     }
 
     private Map<Integer, VideoCategory> loadCategories(Set<Integer> categoryIds) {

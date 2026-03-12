@@ -16,7 +16,7 @@ public interface VideoService {
     /**
      * 获取视频推荐流
      */
-    List<VideoDTO> getVideoFeed(Integer page, Integer size);
+    List<VideoDTO> getVideoFeed(Integer page, Integer size, Long userId);
     
     /**
      * 获取视频详情

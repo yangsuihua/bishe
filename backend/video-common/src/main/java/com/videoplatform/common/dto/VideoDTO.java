@@ -30,4 +30,5 @@ public class VideoDTO {
     private Boolean isLiked;
     private Boolean isFavorited;
     private Boolean isFollowing;
+    private java.util.List<String> tags;
 }
