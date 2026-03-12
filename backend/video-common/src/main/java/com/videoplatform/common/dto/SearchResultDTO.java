@@ -3,6 +3,7 @@ package com.videoplatform.common.dto;
 import lombok.Data;
 
 @Data
+@com.fasterxml.jackson.annotation.JsonIgnoreProperties(ignoreUnknown = true)
 public class SearchResultDTO {
     private Long id;
     private String title;
@@ -16,4 +17,5 @@ public class SearchResultDTO {
     private Integer commentCount;
     private String createdAt;
     private String type; // "video" 或 "user"
+    private java.util.List<String> tags;
 }

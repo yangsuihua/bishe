@@ -131,6 +131,17 @@ public class VideoController {
     }
     
     /**
+     * 审核视频 (模拟后台操作)
+     */
+    @PostMapping("/{videoId}/audit")
+    public Result<Void> auditVideo(@PathVariable Long videoId,
+                                    @RequestParam Integer status,
+                                    @RequestParam(required = false) String reason) {
+        videoService.auditVideo(videoId, status, reason);
+        return Result.success();
+    }
+
+    /**
      * 获取视频的最新审核失败原因
      */
     @GetMapping("/{videoId}/reject-reason")

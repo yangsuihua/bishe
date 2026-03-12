@@ -20,7 +20,7 @@
         <module>video-video</module>
         <module>video-interaction</module>
         <module>video-search</module>
-        <module>video-admin</module>
+<!--        <module>video-admin</module>-->
     </modules>
 
     <properties>

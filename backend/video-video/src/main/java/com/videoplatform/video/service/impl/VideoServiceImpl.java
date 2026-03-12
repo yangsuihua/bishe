@@ -19,6 +19,7 @@ import com.videoplatform.video.mapper.VideoTagRelationMapper;
 import com.videoplatform.video.entity.AuditLog;
 import com.videoplatform.video.service.VideoService;
 import com.videoplatform.video.service.VideoCompressionService;
+import com.videoplatform.common.feign.SearchFeignClient;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
@@ -66,6 +67,7 @@ public class VideoServiceImpl implements VideoService {
     private final AuditLogMapper auditLogMapper;
     private final MinioClient minioClient;
     private final VideoCompressionService videoCompressionService;
+    private final SearchFeignClient searchFeignClient;
     
     @Value("${minio.endpoint}")
     private String minioEndpoint;
@@ -222,6 +224,13 @@ public class VideoServiceImpl implements VideoService {
                 .set(Video::getDeleted, 1)
                 .set(Video::getUpdatedAt, LocalDateTime.now());
         videoMapper.update(null, update);
+        
+        // 同步删除 ES 索引
+        try {
+            searchFeignClient.deleteVideo(videoId);
+        } catch (Exception e) {
+            log.error("同步删除 ES 索引失败, videoId: {}", videoId, e);
+        }
     }
 
     @Override
@@ -517,6 +526,38 @@ public class VideoServiceImpl implements VideoService {
         }
     }
     
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void auditVideo(Long videoId, Integer status, String reason) {
+        Video video = videoMapper.selectById(videoId);
+        if (video == null) return;
+
+        // 更新状态
+        video.setStatus(status);
+        video.setUpdatedAt(LocalDateTime.now());
+        if (status == 1) {
+            video.setPublishedAt(LocalDateTime.now());
+        }
+        videoMapper.updateById(video);
+
+        // 记录审核日志
+        AuditLog auditLog = new AuditLog();
+        auditLog.setVideoId(videoId);
+        auditLog.setAuditStatus(status);
+        auditLog.setReason(reason);
+        auditLog.setCreateTime(LocalDateTime.now());
+        auditLogMapper.insert(auditLog);
+
+        // 如果审核通过，同步到 ES
+        if (status == 1) {
+            try {
+                searchFeignClient.syncVideo(videoId);
+            } catch (Exception e) {
+                log.error("增量同步到 ES 失败, videoId: {}", videoId, e);
+            }
+        }
+    }
+
     @Override
     public String getLatestRejectReason(Long videoId) {
         if (videoId == null) {

@@ -1,0 +1,17 @@
+{
+  "mappings": {
+    "properties": {
+      "id": { "type": "long" },
+      "userId": { "type": "long" },
+      "title": { "type": "text" },
+      "description": { "type": "text" },
+      "tags": { "type": "keyword" },
+      "viewCount": { "type": "long" },
+      "createdAt": { "type": "date", "format": "yyyy-MM-dd HH:mm:ss" },
+      "coverUrl": { "type": "keyword" },
+      "username": { "type": "keyword" },
+      "avatar": { "type": "keyword" },
+      "suggestion": { "type": "completion" }
+    }
+  }
+}

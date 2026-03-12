@@ -15,7 +15,7 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/search")
+@RequestMapping("/search")
 @RequiredArgsConstructor
 public class SearchController {
 
@@ -99,6 +99,21 @@ public class SearchController {
         } catch (Exception e) {
             log.error("获取热搜榜失败, type: {}, days: {}", type, days, e);
             return Result.fail("获取热搜榜失败，请稍后重试");
+        }
+    }
+    /**
+     * 搜索建议（自动补全）
+     * @param prefix 输入前缀
+     * @return 建议词列表
+     */
+    @GetMapping("/suggest")
+    public Result<List<String>> getSuggest(@RequestParam String prefix) {
+        try {
+            List<String> suggestions = searchService.getSuggest(prefix);
+            return Result.success(suggestions);
+        } catch (Exception e) {
+            log.error("获取搜索建议失败, prefix: {}", prefix, e);
+            return Result.fail("获取建议失败");
         }
     }
 }

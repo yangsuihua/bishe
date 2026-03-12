@@ -73,6 +73,14 @@ public interface VideoService {
     List<VideoDTO> getVideosByIds(List<Long> videoIds);
     
     /**
+     * 审核视频
+     * @param videoId 视频ID
+     * @param status 状态（1:通过, 2:驳回）
+     * @param reason 审核意见
+     */
+    void auditVideo(Long videoId, Integer status, String reason);
+
+    /**
      * 获取视频的最新审核失败原因
      */
     String getLatestRejectReason(Long videoId);

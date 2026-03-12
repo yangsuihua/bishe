@@ -46,10 +46,23 @@ public class SearchService {
             SearchRequest searchRequest = SearchRequest.of(s -> s
                     .index(INDEX_NAME)
                     .query(q -> q
-                            .multiMatch(m -> m
-                                    .query(keyword)
-                                    .fields("title^2", "description")
-                                    .fuzziness("AUTO")
+                            .functionScore(fs -> fs
+                                    .query(bq -> bq
+                                            .multiMatch(m -> m
+                                                    .query(keyword)
+                                                    .fields("title^3", "description")
+                                                    .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
+                                            )
+                                    )
+                                    .functions(f -> f
+                                            .fieldValueFactor(fv -> fv
+                                                    .field("viewCount")
+                                                    .factor(0.1)
+                                                    .modifier(co.elastic.clients.elasticsearch._types.query_dsl.FieldValueFactorModifier.Ln2p)
+                                                    .missing(1.0)
+                                            )
+                                    )
+                                    .boostMode(co.elastic.clients.elasticsearch._types.query_dsl.FunctionBoostMode.Multiply)
                             )
                     )
                     .from(from)
@@ -61,6 +74,8 @@ public class SearchService {
                     searchRequest,
                     SearchResultDTO.class
             );
+
+            log.info("搜索关键词 [{}] 完成, 总命中文档数: {}", keyword, response.hits().total() != null ? response.hits().total().value() : 0);
 
             // 转换结果
             return response.hits().hits().stream()
@@ -108,7 +123,7 @@ public class SearchService {
                             .multiMatch(m -> m
                                     .query(keyword)
                                     .fields("title^2", "description")
-                                    .fuzziness("AUTO")
+                                    .operator(co.elastic.clients.elasticsearch._types.query_dsl.Operator.And)
                             )
                     )
                     .from(from)
@@ -153,6 +168,35 @@ public class SearchService {
             } catch (Exception ex) {
                 log.error("记录搜索关键词失败", ex);
             }
+            return new ArrayList<>();
+        }
+    }
+    public List<String> getSuggest(String prefix) {
+        if (!StringUtils.hasText(prefix)) {
+            return new ArrayList<>();
+        }
+
+        try {
+            // 使用 match_phrase_prefix 替代 completion suggester，以支持中段匹配（如“摩天轮”匹配“游乐场的摩天轮”）
+            SearchResponse<com.videoplatform.search.entity.VideoDoc> response = elasticsearchClient.search(s -> s
+                    .index(INDEX_NAME)
+                    .query(q -> q
+                            .matchPhrasePrefix(mpp -> mpp
+                                    .field("title")
+                                    .query(prefix)
+                            )
+                    )
+                    .size(10),
+                    com.videoplatform.search.entity.VideoDoc.class
+            );
+
+            return response.hits().hits().stream()
+                    .map(hit -> hit.source().getTitle())
+                    .distinct()
+                    .collect(Collectors.toList());
+
+        } catch (Exception e) {
+            log.error("获取搜索建议失败, prefix: {}", prefix, e);
             return new ArrayList<>();
         }
     }
