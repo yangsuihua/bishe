@@ -1,0 +1,21 @@
+1、项目启动：C盘redis直接打开，
+d盘zookpeer先启动（D:\kafka_2.12-3.4.1>.\bin\windows\zookeeper-server-start.bat .\config\zookeeper.properties）
+d盘kafka（D:\kafka_2.12-3.4.1>.\bin\windows\kafka-server-start.bat .\config\server.properties）
+c盘minio
+c盘nacos（C:\Program Files\nacos2.2.1\nacos\bin>.\startup.cmd -m standalone） 命名空间与gateway代码的配置yaml相同
+c盘elasticsearch-8.9.0（.\elasticsearch.bat -Epath.data=D:\Elasticsearch\data）  不好说
+                        .\elasticsearch.bat -Epath.data=D:\Elasticsearch\data -Epath.logs=D:\Elasticsearch\logs
+
+1、先注册，然后登录后去video服务搜索【推荐系统-一级召回】，然后去音乐点赞第一个视频，然后删除idea控制台日志，
+刷新页面后访问【首页推荐】导航栏，就可以看出权限变化与一二级召回
+
+
+
+2、然后也可以去科技栏目，点赞评论第二个视频，然后删除idea控制台日志，
+刷新页面后访问【首页推荐】导航栏，就可以看出权限变化与一二级召回
+
+
+2、然后也可以去科技栏目，点赞评论收藏第二个视频，然后删除idea控制台日志，
+刷新页面后访问【首页推荐】导航栏，就可以看出权限变化与一二级召回
+
+
